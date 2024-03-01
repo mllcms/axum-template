@@ -74,6 +74,7 @@ res_from!(
     &str, 400
     String, 400;
     io::Error, 400;
+    anyhow::Error,400
     MultipartError, 422
     serde::de::value::Error, 422;
 );
