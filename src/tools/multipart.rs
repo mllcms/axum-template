@@ -11,35 +11,7 @@ use axum_extra::extract::{multipart::Field, Multipart};
 use bytes::Bytes;
 use derive_more::{Deref, DerefMut};
 
-use crate::tools::{resp, resp::Res};
-
-pub const KB: u64 = 1 << 10;
-pub const MB: u64 = 1 << 20;
-pub const GB: u64 = 1 << 30;
-pub const TB: u64 = 1 << 40;
-
-pub const UNIT: [&str; 4] = ["KB", "MB", "GB", "TB"];
-
-pub fn unit(n: u64) -> String {
-    let mut n = n as f64;
-    for s in UNIT {
-        n /= 1024.0;
-        if 1024.0 > n {
-            return format!("{n:.1}{s}");
-        }
-    }
-    format!("{n:.1}{}", UNIT[3])
-}
-
-#[test]
-fn unit_t() {
-    assert_eq!("1.0KB", unit(KB));
-    assert_eq!("1.0MB", unit(MB));
-    assert_eq!("1.0GB", unit(GB));
-    assert_eq!("1.0TB", unit(TB));
-    assert_eq!("1025.0TB", unit(1025 * TB));
-    assert_eq!("1.1MB", unit(MB + 100 * KB));
-}
+use crate::tools::{resp, resp::Res, unit::*};
 
 /// 默认 limit 0KB..5MB
 ///
@@ -50,11 +22,11 @@ pub struct MultiValue<T: Default + MultiTake> {
     #[deref_mut]
     pub value: T,
     /// 接收的数量
-    pub index: u64,
+    index: u64,
     /// 大小范围
-    pub limit: Range<u64>,
+    limit: Range<u64>,
     /// 数量范围 更新或追加(Vec)
-    pub count: Range<u64>,
+    count: Range<u64>,
 }
 
 impl<T: Default + MultiTake> MultiValue<T> {
@@ -139,7 +111,7 @@ impl<T: FromStr + Sync + Send> MultiTake for T {
 }
 
 #[derive(Default, Deref, DerefMut)]
-pub struct Array<T: MultiTake>(Vec<T>);
+pub struct Array<T: MultiTake>(pub Vec<T>);
 
 impl<T: MultiTake + Debug> Debug for Array<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
