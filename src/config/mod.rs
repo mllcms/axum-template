@@ -1,21 +1,19 @@
-use std::{fs, io, net::SocketAddr, process};
+mod logger;
+mod server;
+
+use std::{fs, io, process};
 
 use once_cell::sync::Lazy;
 use serde::Deserialize;
-
-use crate::gen_default;
 
 pub static CONFIG: Lazy<Config> = Lazy::new(Config::new);
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-    pub addr: SocketAddr,
-    #[serde(default = "default_protocol")]
-    pub protocol: String,
+    pub logger: logger::Logger,
+    pub server: server::Server,
 }
-
-gen_default!(default_protocol, "http");
 
 impl Config {
     fn new() -> Self {
