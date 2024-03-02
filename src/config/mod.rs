@@ -1,18 +1,20 @@
-mod logger;
-mod server;
-
 use std::{fs, io, process};
 
 use once_cell::sync::Lazy;
 use serde::Deserialize;
+
+crate::re_export! {
+   mod logger;
+   mod server;
+}
 
 pub static CONFIG: Lazy<Config> = Lazy::new(Config::new);
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-    pub logger: logger::Logger,
-    pub server: server::Server,
+    pub logger: Logger,
+    pub server: Server,
 }
 
 impl Config {

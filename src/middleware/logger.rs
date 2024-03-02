@@ -20,27 +20,23 @@ use percent_encoding::percent_decode;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tower::{Layer, Service};
 
+use crate::config;
+
 #[derive(Clone)]
 pub struct Logger {
     sender: UnboundedSender<LogMsg>,
 }
 
 impl Logger {
-    /// 支持日期路径比如: logs/%Y-%m-%d.log
-    pub fn new(path: &str, stdout: bool, file_out: bool) -> Self {
+    pub fn new(config: config::Logger) -> Self {
         let mut time = Local::now();
-
-        let mut file = file_out.then(|| {
-            let path = time.format(path).to_string();
-            create_log_file(path)
-        });
-
+        let mut file = config.file.then(|| config.create_log_file(&time));
         let (sender, mut rx) = unbounded_channel::<LogMsg>();
+
         // 单独线程 同步写入日志
-        let format = path.to_string();
         tokio::spawn(async move {
             while let Some(msg) = rx.recv().await {
-                if stdout {
+                if config.stdout {
                     msg.stdout()
                 }
 
@@ -48,20 +44,18 @@ impl Logger {
                     // 切换日志文件
                     if time.date_naive() != msg.begin.date_naive() {
                         time = msg.begin;
-                        *file = create_log_file(time.format(&format).to_string())
+                        *file = config.create_log_file(&time)
                     }
-                    msg.file_out(file)
+                    msg.file_out(file);
+                    // 定期删除日志
+                    if let Err(err) = config.delete_log() {
+                        eprintln!("日志删除失败: {err}")
+                    };
                 }
             }
         });
 
         Self { sender }
-    }
-}
-
-impl Default for Logger {
-    fn default() -> Self {
-        Self::new("logs/%Y-%m-%d.log", true, false)
     }
 }
 
@@ -195,7 +189,7 @@ impl LogMsg {
     }
 }
 
-fn create_log_file(path: String) -> File {
+pub fn create_log_file(path: String) -> File {
     let path = Path::new(&path);
     if let Some(p) = path.parent() {
         fs::create_dir_all(p).expect("自动创建日志文件父级目录失败")

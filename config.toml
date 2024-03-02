@@ -1,2 +1,12 @@
+[server]
 addr = "0.0.0.0:3000"
 protocol = "http"
+
+[logger]
+path = "logs"
+# 每天第一个请求进来时更新
+name = "%Y%m%d.txt"
+file = true
+stdout = true
+# 定期删除(天)
+delete = 1
