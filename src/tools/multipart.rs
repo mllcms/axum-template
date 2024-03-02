@@ -101,30 +101,12 @@ pub trait MultiTake: Send {
 }
 
 #[async_trait]
-impl<T: FromStr + Sync + Send> MultiTake for T {
+impl<T: FromStr + Send> MultiTake for T {
     async fn take(&mut self, field: Field) -> anyhow::Result<u64> {
         let data = field.text().await?;
         let size = data.len();
         *self = data.trim().parse().map_err(|_| anyhow!("类型不匹配"))?;
         Ok(size as u64)
-    }
-}
-
-#[derive(Default, Deref, DerefMut)]
-pub struct Array<T: MultiTake>(pub Vec<T>);
-
-impl<T: MultiTake + Debug> Debug for Array<T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.0)
-    }
-}
-#[async_trait]
-impl<T: Default + MultiTake> MultiTake for Array<T> {
-    async fn take(&mut self, field: Field) -> anyhow::Result<u64> {
-        let mut item = T::default();
-        let size = item.take(field).await?;
-        self.push(item);
-        Ok(size)
     }
 }
 
@@ -157,6 +139,19 @@ impl MultiTake for MultiFile {
             .ok_or(anyhow!("获取文件类型失败"))?;
         self.bytes = field.bytes().await?;
         Ok(self.bytes.len() as u64)
+    }
+}
+
+#[derive(Debug, Default, Deref, DerefMut)]
+pub struct MultiFiles(pub Vec<MultiFile>);
+
+#[async_trait]
+impl MultiTake for MultiFiles {
+    async fn take(&mut self, field: Field) -> anyhow::Result<u64> {
+        let mut mf = MultiFile::default();
+        let size = mf.take(field).await?;
+        self.push(mf);
+        Ok(size)
     }
 }
 
