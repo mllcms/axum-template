@@ -1,3 +1,4 @@
+/// 生成默认值函数
 #[macro_export]
 macro_rules! gen_default {
     ($($id:ident, $v:expr $(;)?)*) => {
@@ -13,6 +14,17 @@ macro_rules! gen_default {
             fn $id() -> $t {
                 $v
             }
+        )*
+    };
+}
+
+/// 再次导出
+#[macro_export]
+macro_rules! re_export {
+    ($($vis:vis mod $module:ident;)*) => {
+        $(
+            $vis mod $module;
+            pub use $module::*;
         )*
     };
 }
