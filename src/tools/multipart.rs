@@ -6,10 +6,15 @@ use std::{
 };
 
 use anyhow::anyhow;
-use axum::async_trait;
+use axum::{async_trait, extract::DefaultBodyLimit};
 use axum_extra::extract::{multipart::Field, Multipart};
 use bytes::Bytes;
 use derive_more::{Deref, DerefMut};
+use tower::{
+    layer::util::{Identity, Stack},
+    ServiceBuilder,
+};
+use tower_http::limit::RequestBodyLimitLayer;
 
 use crate::tools::{resp, resp::Res, unit::*};
 
@@ -200,4 +205,10 @@ macro_rules! multi_take {
         )+
         mp.load($multi).await
     }};
+}
+
+pub fn limit_layer(max: u64) -> ServiceBuilder<Stack<RequestBodyLimitLayer, Stack<DefaultBodyLimit, Identity>>> {
+    ServiceBuilder::new()
+        .layer(DefaultBodyLimit::disable())
+        .layer(RequestBodyLimitLayer::new(max as usize))
 }
