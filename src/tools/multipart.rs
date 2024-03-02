@@ -1,3 +1,24 @@
+//! # Examples
+//!
+//! ```rust,ignore
+//! async fn demo(multi: Multipart) {
+//!     // 通过类型构建提取器
+//!     let mut title = take!(String);
+//!     // 通过值构建提取器
+//!     let mut status = take!(false);
+//!     // 限制大小
+//!     let mut video = take!(MultiFile, limit = 0..GB);
+//!     // 限制数量和类型
+//!     let mut images = take!(MultiFiles, count = 1..10, ct = is_image);
+//!     // 开始提取 multipart/form-data 表单字段和变量同名
+//!     multi_take!(multi => title, status, video, images)?;
+//!     println!("title:{} status:{}", title.value, status.value);
+//!     for item in images.iter() {
+//!         println!("{item:?}")
+//!     }
+//! }
+//! ```
+
 use std::{
     collections::HashMap,
     fmt::{Debug, Formatter, Write},
@@ -22,66 +43,84 @@ use crate::tools::{resp, resp::Res, unit::*};
 ///
 /// 默认 count 1..1
 #[derive(Debug, Deref, DerefMut)]
-pub struct MultiValue<T: Default + MultiTake> {
+pub struct Take<T: Default + MultiTake> {
     #[deref]
     #[deref_mut]
     pub value: T,
+    /// 大小范围
+    pub limit: Range<u64>,
+    /// 数量范围 更新或追加(Vec)
+    pub count: Range<u64>,
+    /// 校验 content-type
+    pub ct: fn(Option<&str>) -> bool,
     /// 接收的数量
     index: u64,
-    /// 大小范围
-    limit: Range<u64>,
-    /// 数量范围 更新或追加(Vec)
-    count: Range<u64>,
 }
 
-impl<T: Default + MultiTake> MultiValue<T> {
-    pub fn new(value: T, limit: Range<u64>, count: Range<u64>) -> Self {
-        Self { value, limit, count, index: 0 }
-    }
+impl<T: Default + MultiTake> Take<T> {
     pub fn value(value: T) -> Self {
         Self { value, ..Self::default() }
     }
-    pub fn limit(limit: Range<u64>) -> Self {
-        Self { limit, ..Self::default() }
-    }
-    pub fn count(count: Range<u64>) -> Self {
-        Self { count, ..Self::default() }
-    }
-
-    pub fn range(limit: Range<u64>, count: Range<u64>) -> Self {
-        Self { limit, count, ..Self::default() }
-    }
 }
 
-impl<T: Default + MultiTake> Default for MultiValue<T> {
+#[macro_export]
+macro_rules! take {
+    ($t:ty) => {
+        $crate::tools::multipart::Take::<$t>::default()
+    };
+    ($t:ty, $($k:ident = $v:expr $(,)?)*) => {{
+        let mut mv = $crate::tools::multipart::Take::<$t>::default();
+        $(mv.$k = $v;)*
+        mv
+    }};
+    ($value:expr) => {
+        $crate::tools::multipart::Take::value($value)
+    };
+    ($value:expr, $($k:ident = $v:expr $(,)?)*) => {{
+        let mut mv = $crate::tools::multipart::Take::value($value);
+        $(mv.$k = $v;)*
+        mv
+    }};
+}
+
+impl<T: Default + MultiTake> Default for Take<T> {
     fn default() -> Self {
-        Self::new(T::default(), 0..5 * MB, 1..1)
+        fn always_true(_: Option<&str>) -> bool {
+            true
+        }
+        Self {
+            ct: always_true,
+            value: T::default(),
+            limit: 0..5 * MB,
+            count: 1..1,
+            index: 0,
+        }
     }
 }
 
 #[async_trait]
 pub trait MultiExtract: Send {
     async fn extract(&mut self, field: Field) -> anyhow::Result<()>;
-    fn check(&mut self, size: u64) -> anyhow::Result<()>;
     fn verify(&self) -> anyhow::Result<()>;
 }
 
 #[async_trait]
-impl<T: Default + MultiTake> MultiExtract for MultiValue<T> {
+impl<T: Default + MultiTake> MultiExtract for Take<T> {
     async fn extract(&mut self, field: Field) -> anyhow::Result<()> {
+        if !(self.ct)(field.content_type()) {
+            return Err(anyhow!("类型不匹配"));
+        }
+
         let size = self.value.take(field).await?;
-        self.check(size)?;
-        self.index += 1;
-        Ok(())
-    }
-    fn check(&mut self, size: u64) -> anyhow::Result<()> {
         if !self.limit.contains(&size) {
             let (start, end) = (unit(self.limit.start), unit(self.limit.end));
             return Err(anyhow!("大小{start}-{end}"));
         }
+
+        self.index += 1;
         let end = self.count.end;
         if self.index > end {
-            return Err(anyhow!("数量不能大于{end}个"));
+            return Err(anyhow!("不大于{end}个"));
         }
         Ok(())
     }
@@ -91,10 +130,10 @@ impl<T: Default + MultiTake> MultiExtract for MultiValue<T> {
         let end = self.count.end;
         if start == end {
             if self.index != start {
-                return Err(anyhow!("数量必须有{start}个"));
+                return Err(anyhow!("必须有{start}个"));
             }
         } else if !self.count.contains(&self.index) {
-            return Err(anyhow!("数量范围{start}-{end}"));
+            return Err(anyhow!("至少有{start}个"));
         }
         Ok(())
     }
@@ -166,7 +205,7 @@ pub struct MultiMap<'a>(pub HashMap<&'static str, &'a mut dyn MultiExtract>);
 impl<'a> MultiMap<'a> {
     pub async fn load(&mut self, mut multi: Multipart) -> resp::Result<()> {
         let result = self.parse(&mut multi).await;
-        while let Ok(Some(_f)) = multi.next_field().await {}
+        while let Ok(Some(_)) = multi.next_field().await {}
         result
     }
 
@@ -178,7 +217,7 @@ impl<'a> MultiMap<'a> {
             value
                 .extract(field)
                 .await
-                .map_err(|err| anyhow!("数据验证失败: {name}<{err}>"))?;
+                .map_err(|err| Res::msg(422, format!("数据验证失败: {name}<{err}>")))?;
         }
 
         let mut msg = String::from("数据验证失败: ");

@@ -1,6 +1,8 @@
 mod macros;
+#[cfg(feature = "multipart")]
 pub mod multipart;
 pub mod resp;
+pub mod unit;
 pub mod validate;
 
 use std::net::{Ipv4Addr, SocketAddr};
