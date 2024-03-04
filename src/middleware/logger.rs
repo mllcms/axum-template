@@ -108,6 +108,12 @@ impl Logger {
     }
 }
 
+impl Default for Logger {
+    fn default() -> Self {
+        Self::new(LoggerConfig::default())
+    }
+}
+
 impl<S> Layer<S> for Logger {
     type Service = LoggerService<S>;
 
