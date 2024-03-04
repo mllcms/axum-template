@@ -10,3 +10,7 @@ file = true
 stdout = true
 # 定期删除(天)
 delete = 1
+
+[jwt]
+secret = "秘钥"
+duration = 1296000 # 半个月
