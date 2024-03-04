@@ -12,7 +12,7 @@ use axum::{
 use axum_extra::headers::{ContentType, HeaderMapExt};
 use bytes::Bytes;
 use once_cell::sync::Lazy;
-use serde::de::DeserializeOwned;
+use serde::Deserialize;
 use validator::Validate;
 
 use crate::{reject, res, tools::resp::Res};
@@ -25,7 +25,7 @@ pub struct VJson<T: Validate>(pub T);
 #[async_trait]
 impl<T, S> FromRequest<S> for VJson<T>
 where
-    T: DeserializeOwned + Validate,
+    T: for<'de> Deserialize<'de> + Validate,
     S: Send + Sync,
 {
     type Rejection = Res<()>;
@@ -48,7 +48,7 @@ pub struct VForm<T: Validate>(pub T);
 #[async_trait]
 impl<T, S> FromRequest<S> for VForm<T>
 where
-    T: DeserializeOwned + Validate,
+    T: for<'de> Deserialize<'de> + Validate,
     S: Send + Sync,
 {
     type Rejection = Res<()>;
@@ -67,7 +67,7 @@ pub struct VJsonOrForm<T: Validate>(pub T);
 #[async_trait]
 impl<T, S> FromRequest<S> for VJsonOrForm<T>
 where
-    T: DeserializeOwned + Validate,
+    T: for<'de> Deserialize<'de> + Validate,
     S: Send + Sync,
 {
     type Rejection = Res<()>;
@@ -91,7 +91,7 @@ pub struct VQuery<T: Validate>(pub T);
 #[async_trait]
 impl<T, S> FromRequest<S> for VQuery<T>
 where
-    T: DeserializeOwned + Validate,
+    T: for<'de> Deserialize<'de> + Validate,
     S: Send + Sync,
 {
     type Rejection = Res<()>;
@@ -115,7 +115,7 @@ pub fn json_content_type(headers: &HeaderMap) -> bool {
 /// 返序列化 json
 fn des_json<T>(data: Result<Bytes, BytesRejection>) -> Result<T, Res<()>>
 where
-    T: Validate + DeserializeOwned,
+    T: for<'de> Deserialize<'de> + Validate,
 {
     let bytes = data.map_err(|err| res!(422, "{err}"))?;
     let data = serde_json::from_slice(&bytes).map_err(|err| res!(422, "{err}"))?;
@@ -127,7 +127,7 @@ where
 /// 返序列化 form
 fn des_form<T>(data: Result<RawForm, RawFormRejection>) -> Result<T, Res<()>>
 where
-    T: Validate + DeserializeOwned,
+    T: for<'de> Deserialize<'de> + Validate,
 {
     let data = match data {
         Ok(RawForm(bytes)) => serde_urlencoded::from_bytes::<T>(&bytes)?,
