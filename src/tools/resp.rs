@@ -20,13 +20,13 @@ pub type Resp<T> = Result<Res<T>, Res<()>>;
 #[derive(Debug, Clone, Serialize)]
 pub struct Res<T: Serialize = ()> {
     pub code: u16,
-    pub message: String,
+    pub info: String,
     pub data: T,
 }
 
 impl<T: Serialize> Res<T> {
     pub fn new(code: u16, msg: impl Display, data: impl Into<T>) -> Self {
-        Self { code, message: msg.to_string(), data: data.into() }
+        Self { code, info: msg.to_string(), data: data.into() }
     }
 }
 
@@ -40,8 +40,8 @@ impl<T: Serialize> IntoResponse for Res<T> {
     }
 }
 
-impl<F: Display> From<F> for Res {
-    fn from(value: F) -> Self {
+impl<T: Display> From<T> for Res {
+    fn from(value: T) -> Self {
         Self::new(400, value, ())
     }
 }
