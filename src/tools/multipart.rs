@@ -37,7 +37,10 @@ use tower::{
 };
 use tower_http::limit::RequestBodyLimitLayer;
 
-use crate::tools::{resp, resp::Res, unit::*};
+use crate::{
+    reject, res,
+    tools::{resp::Res, unit::*},
+};
 
 /// 默认 limit 0KB..5MB
 ///
@@ -173,13 +176,10 @@ impl Debug for MultiFile {
 #[async_trait]
 impl MultiTake for MultiFile {
     async fn take(&mut self, field: Field) -> anyhow::Result<u64> {
-        self.name = field
-            .file_name()
-            .map(ToString::to_string)
-            .ok_or(anyhow!("获取文件名字失败"))?;
+        self.name = field.file_name().map(Into::into).ok_or(anyhow!("获取文件名字失败"))?;
         self.type_ = field
             .content_type()
-            .map(ToString::to_string)
+            .map(Into::into)
             .ok_or(anyhow!("获取文件类型失败"))?;
         self.bytes = field.bytes().await?;
         Ok(self.bytes.len() as u64)
@@ -203,32 +203,32 @@ impl MultiTake for MultiFiles {
 pub struct MultiMap<'a>(pub HashMap<&'static str, &'a mut dyn MultiExtract>);
 
 impl<'a> MultiMap<'a> {
-    pub async fn load(&mut self, mut multi: Multipart) -> resp::Result<()> {
+    pub async fn load(&mut self, mut multi: Multipart) -> Result<(), Res> {
         let result = self.parse(&mut multi).await;
         while let Ok(Some(_)) = multi.next_field().await {}
         result
     }
 
-    pub async fn parse(&mut self, multi: &mut Multipart) -> resp::Result<()> {
+    pub async fn parse(&mut self, multi: &mut Multipart) -> Result<(), Res> {
         while let Some(field) = multi.next_field().await? {
-            let key = field.name().ok_or(Res::msg(422, "获取字段名失败"))?;
+            let key = field.name().ok_or(res!(422, "获取字段名失败"))?;
             let name = key.to_string();
-            let value = self.get_mut(key).ok_or(Res::msg(422, format!("未知字段 {key}")))?;
+            let value = self.get_mut(key).ok_or(res!(422, "未知字段 {key}"))?;
             value
                 .extract(field)
                 .await
-                .map_err(|err| Res::msg(422, format!("数据验证失败: {name}<{err}>")))?;
+                .map_err(|err| res!(422, "数据验证失败: {name}<{err}>"))?;
         }
 
-        let mut msg = String::from("数据验证失败: ");
+        let mut msg = String::new();
         for (k, v) in self.deref_mut() {
             if let Err(err) = v.verify() {
                 write!(msg, "{k}<{err}>; ").unwrap();
             }
         }
         msg.pop();
-        if msg.len() > 20 {
-            return Err(Res::msg(422, msg));
+        if !msg.is_empty() {
+            return reject!(422, "数据验证失败: {msg}");
         }
         Ok(())
     }

@@ -15,7 +15,7 @@ use once_cell::sync::Lazy;
 use serde::de::DeserializeOwned;
 use validator::Validate;
 
-use super::resp::Res;
+use crate::{reject, res, tools::resp::Res};
 
 /// 提取 Json 类型数据 并验证数据
 #[must_use]
@@ -32,7 +32,7 @@ where
 
     async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
         if !json_content_type(req.headers()) {
-            return Err(Res::msg(422, "请求头必须为: application/json"));
+            return reject!(401, "请求头必须为 application/json");
         }
 
         let data = des_json(Bytes::from_request(req, state).await)?;
@@ -97,12 +97,19 @@ where
     type Rejection = Res<()>;
 
     async fn from_request(req: Request, _: &S) -> Result<Self, Self::Rejection> {
-        let data =
-            serde_urlencoded::from_str::<T>(req.uri().query().unwrap_or_default()).map_err(|err| Res::msg(422, err))?;
+        let uri = req.uri().query().unwrap_or_default();
+        let data = serde_urlencoded::from_str(uri).map_err(|err| res!(422, "{err}"))?;
 
         validate(&data)?;
         Ok(VQuery(data))
     }
+}
+
+static JSON: Lazy<ContentType> = Lazy::new(ContentType::json);
+
+/// 判断 json 请求头
+pub fn json_content_type(headers: &HeaderMap) -> bool {
+    headers.typed_get::<ContentType>().map(|t| t == *JSON).unwrap_or(false)
 }
 
 /// 返序列化 json
@@ -110,9 +117,8 @@ fn des_json<T>(data: Result<Bytes, BytesRejection>) -> Result<T, Res<()>>
 where
     T: Validate + DeserializeOwned,
 {
-    let bytes = data.map_err(|err| Res::msg(422, err))?;
-    let data = serde_json::from_slice::<T>(&bytes)
-        .map_err(|e| Res::msg(422, e.to_string().split(" at line").next().unwrap_or_default()))?;
+    let bytes = data.map_err(|err| res!(422, "{err}"))?;
+    let data = serde_json::from_slice(&bytes).map_err(|err| res!(422, "{err}"))?;
 
     validate(&data)?;
     Ok(data)
@@ -125,18 +131,11 @@ where
 {
     let data = match data {
         Ok(RawForm(bytes)) => serde_urlencoded::from_bytes::<T>(&bytes)?,
-        Err(_) => return Err(Res::msg(422, "无法获取到表单数据")),
+        Err(_) => return Err(res!(422, "无法获取到表单数据")),
     };
 
     validate(&data)?;
     Ok(data)
-}
-
-static JSON: Lazy<ContentType> = Lazy::new(ContentType::json);
-
-/// 判断 json 请求头
-pub fn json_content_type(headers: &HeaderMap) -> bool {
-    headers.typed_get::<ContentType>().map(|t| t == *JSON).unwrap_or(false)
 }
 
 /// 数据验证
@@ -153,7 +152,7 @@ pub fn validate(data: impl Validate) -> Result<(), Res<()>> {
             msg.replace_range(msg.len() - 2.., ">; ")
         }
         msg.pop();
-        return Err(Res::msg(422, msg));
+        return reject!(422, "{msg}");
     }
     Ok(())
 }
