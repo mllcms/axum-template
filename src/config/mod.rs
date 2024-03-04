@@ -3,9 +3,11 @@ use std::{fs, io, process};
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 
+use crate::middleware::logger::LoggerConfig;
+
 crate::re_export! {
-   mod logger;
    mod server;
+   mod jwt;
 }
 
 pub static CONFIG: Lazy<Config> = Lazy::new(Config::new);
@@ -13,8 +15,9 @@ pub static CONFIG: Lazy<Config> = Lazy::new(Config::new);
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-    pub logger: Logger,
+    pub logger: LoggerConfig,
     pub server: Server,
+    pub jwt: JwtConfig,
 }
 
 impl Config {
