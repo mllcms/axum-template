@@ -11,6 +11,7 @@ use axum::{
 };
 use axum_extra::headers::{ContentType, HeaderMapExt};
 use bytes::Bytes;
+use derive_more::{Deref, DerefMut};
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use validator::Validate;
@@ -19,7 +20,7 @@ use crate::{reject, res, tools::resp::Res};
 
 /// 提取 Json 类型数据 并验证数据
 #[must_use]
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Deref, DerefMut)]
 pub struct VJson<T: Validate>(pub T);
 
 #[async_trait]
@@ -42,7 +43,7 @@ where
 
 /// 提取 Form 类型数据 并验证数据
 #[must_use]
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Deref, DerefMut)]
 pub struct VForm<T: Validate>(pub T);
 
 #[async_trait]
@@ -61,7 +62,7 @@ where
 
 /// 提取 Json 或者 Form 类型数据 并验证数据
 #[must_use]
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Deref, DerefMut)]
 pub struct VJsonOrForm<T: Validate>(pub T);
 
 #[async_trait]
@@ -85,7 +86,7 @@ where
 
 /// 提取 Query 类型数据 并验证数据
 #[must_use]
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Deref, DerefMut)]
 pub struct VQuery<T: Validate>(pub T);
 
 #[async_trait]
