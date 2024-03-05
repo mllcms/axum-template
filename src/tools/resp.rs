@@ -15,7 +15,8 @@ use std::fmt::Display;
 use axum::response::{IntoResponse, Response};
 use serde::Serialize;
 
-pub type Resp<T> = Result<Res<T>, Res<()>>;
+pub type Resp<T> = std::result::Result<Res<T>, Res<()>>;
+pub type Result<T> = std::result::Result<T, Res<()>>;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Res<T: Serialize = ()> {
@@ -49,10 +50,10 @@ impl<T: Display> From<T> for Res {
 #[macro_export]
 macro_rules! res {
     ($code:expr, $($msg:tt)+) => {
-        Res::new($code, format!($($msg)+), ()) as Res
+        $crate::tools::resp::Res::new($code, format!($($msg)+), ()) as $crate::tools::resp::Res
     };
     ($code:expr => $data:expr, $($msg:tt)+) => {
-        Res::new($code, format!($($msg)+), $data)
+        $crate::tools::resp::Res::new($code, format!($($msg)+), $data)
     };
 }
 
