@@ -1,13 +1,11 @@
 //! # 提取
+//! 使用 [`Jwt`] 提取可以不依赖 [`JwtAuth`] 拿不到数据时会自己解析
+//!
+//! 使用 [`axum::extract::Extension`] 提取时必需使用 [`JwtAuth`] 不然会报错
 //! ```rust,ignore
-//! async fn info(
-//! // 不需要中间件提取不到数据会自己解析
-//! Jwt(user1): Jwt<User>,
-//! // 依赖中间件没有中间件挂载数据会报错
-//! Extension(user2): Extension<Arc<User>>
-//! ) -> Resp<Arc<User>> {
-//!     assert_eq!(user1, user2);
-//!     resolve!(200 => user1, "获取用户信息成功")
+//! async fn info(Jwt(user): Jwt<User>) -> Resp<Arc<User>> {
+//!     /* some handle */
+//!     resolve!(200 => user, "获取用户信息成功")
 //! }
 //! ```
 //!
@@ -46,10 +44,10 @@ use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use tower::{Layer, Service};
 
-use crate::{res, tools::resp::Res};
+use crate::res;
 
 #[derive(Debug, Clone)]
-pub struct Jwt<T: JwtToken>(pub Arc<T>);
+pub struct Jwt<T: JwtToken>(pub T);
 
 #[async_trait]
 impl<T, S> FromRequestParts<S> for Jwt<T>
@@ -59,19 +57,18 @@ where
 {
     type Rejection = Response;
     async fn from_request_parts(parts: &mut Parts, _: &S) -> Result<Self, Self::Rejection> {
-        match parts.extensions.get::<Arc<T>>() {
-            Some(data) => Ok(Self(data.clone())),
+        match parts.extensions.remove::<T>() {
+            Some(data) => Ok(Self(data)),
             None => Ok(Self(auth_token(&parts.headers)?)),
         }
     }
 }
 
-fn auth_token<T: JwtToken>(header: &HeaderMap) -> Result<Arc<T>, Response> {
+fn auth_token<T: JwtToken>(header: &HeaderMap) -> Result<T, Response> {
     let auth = header
         .typed_get::<Authorization<Bearer>>()
         .ok_or(res!(401, "身份认证失败: 请求未携带有效token").into_response())?;
-    let data = T::decode(auth.token()).map_err(|err| res!(401, "身份认证失败: {err}").into_response())?;
-    Ok(Arc::new(data))
+    T::decode(auth.token()).map_err(|err| res!(401, "身份认证失败: {err}").into_response())
 }
 
 /// # Examples
@@ -92,13 +89,13 @@ fn auth_token<T: JwtToken>(header: &HeaderMap) -> Result<Arc<T>, Response> {
 pub struct JwtAuth<T, A> {
     allow: A,
     // 幻象数据存储类型不会占内存
-    _t: PhantomData<T>,
+    payload: PhantomData<T>,
 }
 
 impl<T: JwtToken, A: Allow> JwtAuth<T, A> {
     /// allow 返回 true 时免验证
     pub fn new(allow: A) -> Self {
-        Self { allow, _t: PhantomData }
+        Self { allow, payload: PhantomData }
     }
 }
 
@@ -115,7 +112,7 @@ impl<S, T: JwtToken, A: Allow> Layer<S> for JwtAuth<T, A> {
     type Service = JwtAuthService<S, T, A>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        JwtAuthService { inner, allow: self.allow.clone(), _t: self._t }
+        JwtAuthService { inner, allow: self.allow.clone(), payload: self.payload }
     }
 }
 
@@ -123,14 +120,14 @@ impl<S, T: JwtToken, A: Allow> Layer<S> for JwtAuth<T, A> {
 pub struct JwtAuthService<S, T, A> {
     inner: S,
     allow: A,
-    _t: PhantomData<T>,
+    payload: PhantomData<T>,
 }
 
 impl<S, T, A> Service<Request<Body>> for JwtAuthService<S, T, A>
 where
     S: Service<Request<Body>, Response = Response> + Send + 'static,
     S::Future: Send + 'static,
-    T: JwtToken + Sync + Send + Clone + 'static,
+    T: JwtToken + Sync + Send + 'static,
     A: Allow,
 {
     type Response = S::Response;
@@ -171,21 +168,20 @@ pub struct Claims<T> {
     data: T,
 }
 
-pub trait JwtToken: Serialize + for<'a> Deserialize<'a> {
+pub trait JwtToken: Serialize + for<'a> Deserialize<'a> + Clone {
     fn secret() -> &'static Secret;
 
     fn encode(self) -> anyhow::Result<String> {
         let exp = Local::now().timestamp() as usize + Self::duration();
         let claims = Claims { data: self, exp };
         let secret = Self::secret();
-        let res = jsonwebtoken::encode(&secret.header, &claims, &secret.encoding_key);
-        Ok(res?)
+        Ok(jsonwebtoken::encode(&secret.header, &claims, &secret.encoding_key)?)
     }
 
     fn decode(token: &str) -> anyhow::Result<Self> {
         let secret = Self::secret();
-        let res = jsonwebtoken::decode::<Claims<Self>>(token, &secret.decoding_key, &secret.validation);
-        Ok(res?.claims.data)
+        let data = jsonwebtoken::decode::<Claims<Self>>(token, &secret.decoding_key, &secret.validation)?;
+        Ok(data.claims.data)
     }
 
     /// 持续时间默认半个月
