@@ -1,7 +1,7 @@
 //! # 提取
 //! 使用 [`Jwt`] 提取可以不依赖 [`JwtAuth`] 拿不到数据时会自己解析
 //!
-//! 使用 [`axum::extract::Extension`] 提取时必需使用 [`JwtAuth`] 不然会报错
+//! 使用 [`axum::extract::Extension`] 提取时必需使用 [`JwtAuth`]
 //! ```rust,ignore
 //! async fn info(Jwt(user): Jwt<User>) -> Resp<Arc<User>> {
 //!     /* some handle */
@@ -139,25 +139,21 @@ where
     }
 
     fn call(&mut self, mut req: Request<Body>) -> Self::Future {
-        let mut response = None;
-
         // 免验证直接放行
-        if !self.allow.allow(req.uri().path()) {
-            match auth_token::<T>(req.headers()) {
-                Ok(claims) => {
-                    req.extensions_mut().insert(claims);
-                }
-                Err(err_res) => response = Some(err_res),
-            }
+        if self.allow.allow(req.uri().path()) {
+            return Box::pin(self.inner.call(req));
         }
 
-        let future = self.inner.call(req);
+        let result = auth_token::<T>(req.headers()).map(|claims| {
+            req.extensions_mut().insert(claims);
+            self.inner.call(req)
+        });
+
         Box::pin(async move {
-            let response = match response {
-                Some(v) => v,
-                None => future.await?,
-            };
-            Ok(response)
+            match result {
+                Ok(future) => future.await,
+                Err(response) => Ok(response),
+            }
         })
     }
 }
