@@ -1,14 +1,14 @@
+crate::re_export! {
+   mod server;
+   mod jwt;
+}
+
 use std::{fs, io, process};
 
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 
 use crate::middleware::logger::LoggerConfig;
-
-crate::re_export! {
-   mod server;
-   mod jwt;
-}
 
 pub static CONFIG: Lazy<Config> = Lazy::new(Config::new);
 
