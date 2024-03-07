@@ -1,3 +1,4 @@
+pub mod compare;
 mod macros;
 #[cfg(feature = "multipart")]
 pub mod multipart;
