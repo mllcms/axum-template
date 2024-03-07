@@ -26,7 +26,6 @@
 
 use std::{
     marker::PhantomData,
-    sync::Arc,
     task::{Context, Poll},
 };
 
@@ -44,7 +43,7 @@ use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use tower::{Layer, Service};
 
-use crate::res;
+use crate::{res, tools::compare::CompareStr};
 
 #[derive(Debug, Clone)]
 pub struct Jwt<T: JwtToken>(pub T);
@@ -92,7 +91,7 @@ pub struct JwtAuth<T, A> {
     payload: PhantomData<T>,
 }
 
-impl<T: JwtToken, A: Allow> JwtAuth<T, A> {
+impl<T: JwtToken, A: CompareStr> JwtAuth<T, A> {
     /// allow 返回 true 时免验证
     pub fn new(allow: A) -> Self {
         Self { allow, payload: PhantomData }
@@ -108,7 +107,7 @@ impl<T: JwtToken> Default for JwtAuth<T, fn(&str) -> bool> {
     }
 }
 
-impl<S, T: JwtToken, A: Allow> Layer<S> for JwtAuth<T, A> {
+impl<S, T: JwtToken, A: CompareStr> Layer<S> for JwtAuth<T, A> {
     type Service = JwtAuthService<S, T, A>;
 
     fn layer(&self, inner: S) -> Self::Service {
@@ -128,7 +127,7 @@ where
     S: Service<Request<Body>, Response = Response> + Send + 'static,
     S::Future: Send + 'static,
     T: JwtToken + Sync + Send + 'static,
-    A: Allow,
+    A: CompareStr,
 {
     type Response = S::Response;
     type Error = S::Error;
@@ -140,7 +139,7 @@ where
 
     fn call(&mut self, mut req: Request<Body>) -> Self::Future {
         // 免验证直接放行
-        if self.allow.allow(req.uri().path()) {
+        if self.allow.compare(req.uri().path()) {
             return Box::pin(self.inner.call(req));
         }
 
@@ -203,39 +202,5 @@ impl Secret {
             validation: Validation::default(),
             header: Header::default(),
         }
-    }
-}
-
-pub trait Allow: Clone {
-    fn allow(&self, uri: &str) -> bool;
-}
-
-impl<T: Fn(&str) -> bool + Clone> Allow for T {
-    fn allow(&self, uri: &str) -> bool {
-        self(uri)
-    }
-}
-
-impl Allow for &str {
-    fn allow(&self, uri: &str) -> bool {
-        uri.contains(self)
-    }
-}
-
-impl Allow for Arc<String> {
-    fn allow(&self, uri: &str) -> bool {
-        uri.contains(self.as_ref())
-    }
-}
-
-impl<const N: usize> Allow for &'static [&str; N] {
-    fn allow(&self, uri: &str) -> bool {
-        self.iter().any(|a| uri.contains(a))
-    }
-}
-
-impl Allow for Arc<Vec<String>> {
-    fn allow(&self, uri: &str) -> bool {
-        self.iter().any(|a| uri.contains(a))
     }
 }
