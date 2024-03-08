@@ -8,7 +8,11 @@ pub mod validator;
 
 use std::net::{Ipv4Addr, SocketAddr};
 
+use axum::extract::Request;
 use color_string::{pcs, Colored, Font::*};
+use serde::{Deserialize, Serialize};
+
+use crate::res;
 
 pub fn prompt_address(addr: &SocketAddr, protocol: &str) {
     let mut ips = vec![addr.ip()];
@@ -30,4 +34,9 @@ pub fn prompt_address(addr: &SocketAddr, protocol: &str) {
             pcs!(Green => "➜  "; RBold => "Network: "; RCyan => format!("{protocol}://{ip}:{port}"));
         }
     }
+}
+
+pub fn parse_query<'de, T: Deserialize<'de>>(req: &'de Request) -> resp::Result<T> {
+    let uri = req.uri().query().unwrap_or_default();
+    serde_urlencoded::from_str(uri).map_err(|err| res!(422, "{err}"))
 }

@@ -16,7 +16,10 @@ use once_cell::sync::Lazy;
 use serde::Deserialize;
 use validator::Validate;
 
-use crate::{reject, res, tools::resp::Res};
+use crate::{
+    reject, res,
+    tools::{parse_query, resp::Res},
+};
 
 /// 提取 Json 类型数据 并验证数据
 #[must_use]
@@ -98,9 +101,7 @@ where
     type Rejection = Res<()>;
 
     async fn from_request(req: Request, _: &S) -> Result<Self, Self::Rejection> {
-        let uri = req.uri().query().unwrap_or_default();
-        let data = serde_urlencoded::from_str(uri).map_err(|err| res!(422, "{err}"))?;
-
+        let data = parse_query(&req)?;
         validate(&data)?;
         Ok(VQuery(data))
     }
