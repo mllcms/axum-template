@@ -208,7 +208,8 @@ impl LogMsg {
         };
 
         let method = match self.method.as_str() {
-            "GET" | "POST" => cs!(BgBlue; " {:<6} ", self.method),
+            "GET" => cs!(BgGreen; " {:<6} ", self.method),
+            "POST" => cs!(BgBlue; " {:<6} ", self.method),
             "DELETE" => cs!(BgRed; " {:<6} ", self.method),
             _ => cs!(BgYellow; " {:<6} ", self.method),
         };
