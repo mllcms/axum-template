@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 pub trait CompareStr: Clone {
     fn compare(&self, uri: &str) -> bool;
@@ -31,5 +31,17 @@ impl<const N: usize> CompareStr for &'static [&str; N] {
 impl CompareStr for Arc<Vec<String>> {
     fn compare(&self, uri: &str) -> bool {
         self.iter().any(|a| uri.contains(a))
+    }
+}
+
+impl CompareStr for Arc<HashSet<&'static str>> {
+    fn compare(&self, uri: &str) -> bool {
+        self.contains(uri)
+    }
+}
+
+impl CompareStr for Arc<HashSet<String>> {
+    fn compare(&self, uri: &str) -> bool {
+        self.contains(uri)
     }
 }
