@@ -43,7 +43,7 @@ impl Intercept for Download {
     type Ctx = bool;
 
     async fn before(&self, req: &mut Request<Body>) -> resp::Result<Self::Ctx> {
-        Ok(matches!(parse_query::<Type>(&req), Ok(Type::Download)))
+        Ok(matches!(parse_query::<Type>(req), Ok(Type::Download)))
     }
 
     async fn after(&self, ctx: Self::Ctx, res: &mut Response) {
