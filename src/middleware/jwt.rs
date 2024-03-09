@@ -1,10 +1,29 @@
-//! # 提取
+//! # 使用
 //! 使用 [`Jwt`] 提取可以不依赖 [`JwtAuth`] 拿不到数据时会自己解析
 //!
 //! 使用 [`axum::extract::Extension`] 提取时必需使用 [`JwtAuth`]
+//!
 //! ```rust,ignore
-//! async fn info(Jwt(user): Jwt<User>) -> Resp<Arc<User>> {
-//!     /* some handle */
+//! #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+//! struct User {
+//!     name: String,
+//!     phone: String,
+//! }
+//!
+//! impl JwtToken for User {
+//!     fn secret() -> &'static Secret {
+//!         &CONFIG.jwt.secret
+//!     }
+//! }
+//!
+//! async fn login(VJson(user): VJson<User>) -> Resp<String> {
+//!     match user.encode() {
+//!         Ok(token) => resolve!(201 => token, "登录成功"),
+//!         Err(err) => reject!(400, "登录失败: {err}"),
+//!     }
+//! }
+//!
+//! async fn info(Jwt(user): Jwt<User>) -> Resp<User> {
 //!     resolve!(200 => user, "获取用户信息成功")
 //! }
 //! ```
@@ -43,7 +62,10 @@ use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use tower::{Layer, Service};
 
-use crate::{res, tools::compare::CompareStr};
+use crate::{
+    res,
+    tools::compare::{always_false, CompareStr},
+};
 
 #[derive(Debug, Clone)]
 pub struct Jwt<T: JwtToken>(pub T);
@@ -100,9 +122,6 @@ impl<T: JwtToken, A: CompareStr> JwtAuth<T, A> {
 
 impl<T: JwtToken> Default for JwtAuth<T, fn(&str) -> bool> {
     fn default() -> Self {
-        fn always_false(_: &str) -> bool {
-            true
-        }
         Self::new(always_false)
     }
 }
