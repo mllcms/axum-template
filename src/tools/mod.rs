@@ -10,7 +10,7 @@ use std::net::{Ipv4Addr, SocketAddr};
 
 use axum::extract::Request;
 use color_string::{pcs, Colored, Font::*};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::res;
 
