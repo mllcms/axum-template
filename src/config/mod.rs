@@ -13,10 +13,11 @@ use crate::middleware::logger::LoggerConfig;
 pub static CONFIG: Lazy<Config> = Lazy::new(Config::new);
 
 #[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Config {
+    #[cfg(feature = "database")]
+    pub database: crate::database::PgConfig,
     pub logger: LoggerConfig,
-    pub server: Server,
+    pub server: ServerConfig,
     pub jwt: JwtConfig,
 }
 
