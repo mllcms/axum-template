@@ -6,7 +6,7 @@ use crate::gen_default;
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Server {
+pub struct ServerConfig {
     pub addr: SocketAddr,
     #[serde(default = "default_protocol")]
     pub protocol: String,
