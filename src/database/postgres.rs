@@ -1,3 +1,14 @@
+//! # Examples
+//!
+//! ```rust, ignore
+//! let config = PgConfig{..};
+//! Router::new()
+//! .route("/user",post(get_user))
+//! .layer(config.build().await);
+//!
+//! async fn get_user(PgConn(conn):PgConn) {}
+//! ```
+
 use std::{
     fmt::{Display, Formatter},
     process,
@@ -14,10 +25,10 @@ pub type PgPool = bb8::Pool<AsyncDieselConnectionManager<AsyncPgConnection>>;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PgConfig {
-    database: String,
-    hostname: String,
-    username: String,
-    password: String,
+    pub database: String,
+    pub hostname: String,
+    pub username: String,
+    pub password: String,
 }
 
 impl PgConfig {

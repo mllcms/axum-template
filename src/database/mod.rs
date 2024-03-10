@@ -1,3 +1,1 @@
-crate::re_export! {
-    mod postgres;
-}
+pub mod postgres;
