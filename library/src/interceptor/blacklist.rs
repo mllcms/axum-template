@@ -3,9 +3,9 @@ use std::net::SocketAddr;
 use axum::{async_trait, body::Body, extract::ConnectInfo, http::Request};
 
 use crate::{
-    middleware::interceptor::cors::{Intercept, Interceptor},
-    reject, res,
-    tools::{compare::CompareStr, resp},
+    compare::CompareStr,
+    interceptor::{Intercept, Interceptor},
+    reject, res, resp,
 };
 
 #[derive(Debug, Clone)]

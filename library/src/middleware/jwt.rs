@@ -63,8 +63,8 @@ use serde::{Deserialize, Serialize};
 use tower::{Layer, Service};
 
 use crate::{
+    compare::{always_false, CompareStr},
     res,
-    tools::compare::{always_false, CompareStr},
 };
 
 #[derive(Debug, Clone)]

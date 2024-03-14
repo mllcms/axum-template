@@ -16,10 +16,7 @@ use once_cell::sync::Lazy;
 use serde::Deserialize;
 use validator::Validate;
 
-use crate::{
-    reject, res,
-    tools::{parse_query, resp::Res},
-};
+use crate::{reject, res, resp::Res, tools::parse_query};
 
 /// 提取 Json 类型数据 并验证数据
 #[must_use]

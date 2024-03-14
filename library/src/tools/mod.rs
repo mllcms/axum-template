@@ -1,10 +1,4 @@
-pub mod compare;
-mod macros;
-#[cfg(feature = "multipart")]
-pub mod multipart;
-pub mod resp;
 pub mod unit;
-pub mod validator;
 
 use std::net::{Ipv4Addr, SocketAddr};
 
@@ -12,7 +6,7 @@ use axum::extract::Request;
 use color_string::{pcs, Colored, Font::*};
 use serde::Deserialize;
 
-use crate::res;
+use crate::{res, resp};
 
 pub fn prompt_address(addr: &SocketAddr, protocol: &str) {
     let mut ips = vec![addr.ip()];

@@ -10,8 +10,9 @@ use axum::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    middleware::interceptor::cors::{Intercept, Interceptor},
-    tools::{parse_query, resp},
+    interceptor::cors::{Intercept, Interceptor},
+    resp,
+    tools::parse_query,
 };
 
 /// # Examples

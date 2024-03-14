@@ -19,7 +19,7 @@ use bb8::{ManageConnection, PooledConnection};
 use diesel_async::{pooled_connection::AsyncDieselConnectionManager, AsyncPgConnection};
 use serde::{Deserialize, Serialize};
 
-use crate::tools::resp::Res;
+use crate::resp::Res;
 
 pub type PgPool = bb8::Pool<AsyncDieselConnectionManager<AsyncPgConnection>>;
 

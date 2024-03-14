@@ -50,10 +50,10 @@ impl<T: Display> From<T> for Res {
 #[macro_export]
 macro_rules! res {
     ($code:expr, $($msg:tt)+) => {
-        $crate::tools::resp::Res::new($code, format!($($msg)+), ()) as $crate::tools::resp::Res
+        $crate::resp::Res::new($code, format!($($msg)+), ()) as $crate::resp::Res
     };
     ($code:expr => $data:expr, $($msg:tt)+) => {
-        $crate::tools::resp::Res::new($code, format!($($msg)+), $data)
+        $crate::resp::Res::new($code, format!($($msg)+), $data)
     };
 }
 

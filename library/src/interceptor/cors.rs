@@ -9,7 +9,7 @@ use axum::{
 use futures_util::future::BoxFuture;
 use tower::{Layer, Service};
 
-use crate::tools::resp;
+use crate::resp;
 
 #[async_trait]
 pub trait Intercept: Clone {
