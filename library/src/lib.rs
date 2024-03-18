@@ -2,6 +2,8 @@ pub mod compare;
 #[cfg(feature = "database")]
 pub mod database;
 pub mod interceptor;
+pub mod jsonwebtoken;
+pub mod logger;
 pub mod macros;
 pub mod middleware;
 pub mod multipart;

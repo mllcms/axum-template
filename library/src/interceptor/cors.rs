@@ -13,11 +13,11 @@ use crate::resp;
 
 #[async_trait]
 pub trait Intercept: Clone {
-    type Ctx: Send;
+    type Context: Send;
     /// 返回 Err 将不会往下执行
-    async fn before(&self, req: &mut Request<Body>) -> resp::Result<Self::Ctx>;
+    async fn before(&self, req: &mut Request<Body>) -> resp::Result<Self::Context>;
     /// 如果 before 返回 Err 将不会执行这个
-    async fn after(&self, _ctx: Self::Ctx, _res: &mut Response) {}
+    async fn after(&self, _ctx: Self::Context, _res: &mut Response) {}
 }
 
 /// 拦截器

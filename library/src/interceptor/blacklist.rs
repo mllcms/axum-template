@@ -21,9 +21,9 @@ impl<T: CompareStr> BlackIp<T> {
 
 #[async_trait]
 impl<T: CompareStr + Sync> Intercept for BlackIp<T> {
-    type Ctx = ();
+    type Context = ();
 
-    async fn before(&self, req: &mut Request<Body>) -> resp::Result<Self::Ctx> {
+    async fn before(&self, req: &mut Request<Body>) -> resp::Result<Self::Context> {
         let addr = req
             .extensions()
             .get::<ConnectInfo<SocketAddr>>()

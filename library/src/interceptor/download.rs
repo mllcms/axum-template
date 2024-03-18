@@ -41,14 +41,14 @@ enum Type {
 
 #[async_trait]
 impl Intercept for Download {
-    type Ctx = bool;
+    type Context = bool;
 
-    async fn before(&self, req: &mut Request<Body>) -> resp::Result<Self::Ctx> {
+    async fn before(&self, req: &mut Request<Body>) -> resp::Result<Self::Context> {
         Ok(matches!(parse_query::<Type>(req), Ok(Type::Download)))
     }
 
-    async fn after(&self, ctx: Self::Ctx, res: &mut Response) {
-        if ctx {
+    async fn after(&self, context: Self::Context, res: &mut Response) {
+        if context {
             let headers = res.headers_mut();
             let stream = HeaderValue::from_str("application/octet-stream").unwrap();
             let attachment = HeaderValue::from_str("attachment").unwrap();

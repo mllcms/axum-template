@@ -43,137 +43,27 @@
 //! JwtAuth::<User, _>::new(Arc::new(vec![String::from("/login")]));
 //! ```
 
-use std::{
-    marker::PhantomData,
-    task::{Context, Poll},
-};
+crate::re_export! {
+    mod extractor;
+    mod middleware;
+}
 
 use axum::{
-    async_trait,
-    body::Body,
-    extract::FromRequestParts,
-    http::{request::Parts, HeaderMap, Request},
+    http::HeaderMap,
     response::{IntoResponse, Response},
 };
 use axum_extra::headers::{authorization::Bearer, Authorization, HeaderMapExt};
 use chrono::Local;
-use futures_util::future::BoxFuture;
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
-use tower::{Layer, Service};
 
-use crate::{
-    compare::{always_false, CompareStr},
-    res,
-};
-
-#[derive(Debug, Clone)]
-pub struct Jwt<T: JwtToken>(pub T);
-
-#[async_trait]
-impl<T, S> FromRequestParts<S> for Jwt<T>
-where
-    T: JwtToken + Send + Sync + 'static,
-    S: Send + Sync,
-{
-    type Rejection = Response;
-    async fn from_request_parts(parts: &mut Parts, _: &S) -> Result<Self, Self::Rejection> {
-        match parts.extensions.remove::<T>() {
-            Some(data) => Ok(Self(data)),
-            None => Ok(Self(auth_token(&parts.headers)?)),
-        }
-    }
-}
+use crate::res;
 
 fn auth_token<T: JwtToken>(header: &HeaderMap) -> Result<T, Response> {
     let auth = header
         .typed_get::<Authorization<Bearer>>()
         .ok_or(res!(401, "身份认证失败: 请求未携带有效token").into_response())?;
     T::decode(auth.token()).map_err(|err| res!(401, "身份认证失败: {err}").into_response())
-}
-
-/// # Examples
-///
-/// ```rust,ignore
-/// JwtAuth::<User, _>::new(always_false);
-/// fn always_false(_uri: &str) -> bool {
-///     true
-/// }
-///
-/// JwtAuth::<User, _>::new("/login");
-/// JwtAuth::<User, _>::new(&["/login"]);
-///
-/// JwtAuth::<User, _>::new(Arc::new(String::from("/login")));
-/// JwtAuth::<User, _>::new(Arc::new(vec![String::from("/login")]));
-/// ```
-#[derive(Clone)]
-pub struct JwtAuth<T, A> {
-    allow: A,
-    // 幻象数据存储类型不会占内存
-    payload: PhantomData<T>,
-}
-
-impl<T: JwtToken, A: CompareStr> JwtAuth<T, A> {
-    /// allow 返回 true 时免验证
-    pub fn new(allow: A) -> Self {
-        Self { allow, payload: PhantomData }
-    }
-}
-
-impl<T: JwtToken> Default for JwtAuth<T, fn(&str) -> bool> {
-    fn default() -> Self {
-        Self::new(always_false)
-    }
-}
-
-impl<S, T: JwtToken, A: CompareStr> Layer<S> for JwtAuth<T, A> {
-    type Service = JwtAuthService<S, T, A>;
-
-    fn layer(&self, inner: S) -> Self::Service {
-        JwtAuthService { inner, allow: self.allow.clone(), payload: self.payload }
-    }
-}
-
-#[derive(Clone)]
-pub struct JwtAuthService<S, T, A> {
-    inner: S,
-    allow: A,
-    payload: PhantomData<T>,
-}
-
-impl<S, T, A> Service<Request<Body>> for JwtAuthService<S, T, A>
-where
-    S: Service<Request<Body>, Response = Response> + Send + 'static,
-    S::Future: Send + 'static,
-    T: JwtToken + Sync + Send + 'static,
-    A: CompareStr,
-{
-    type Response = S::Response;
-    type Error = S::Error;
-    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
-
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
-    }
-
-    fn call(&mut self, mut req: Request<Body>) -> Self::Future {
-        // 免验证直接放行
-        if self.allow.compare(req.uri().path()) {
-            return Box::pin(self.inner.call(req));
-        }
-
-        let result = auth_token::<T>(req.headers()).map(|claims| {
-            req.extensions_mut().insert(claims);
-            self.inner.call(req)
-        });
-
-        Box::pin(async move {
-            match result {
-                Ok(future) => future.await,
-                Err(response) => Ok(response),
-            }
-        })
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
