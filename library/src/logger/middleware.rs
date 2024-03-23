@@ -1,10 +1,9 @@
 use std::{
-    fs,
-    fs::File,
-    io::Write,
+    io,
     net::SocketAddr,
-    path::{Path, PathBuf},
+    sync::mpsc::{self, Sender},
     task::{Context, Poll},
+    thread,
 };
 
 use axum::{
@@ -13,93 +12,43 @@ use axum::{
     http::{header::LOCATION, Request},
     response::Response,
 };
-use chrono::{DateTime, Local};
-use color_string::{cs, fonts, Colored, Font::*};
+use chrono::Local;
 use futures_util::future::BoxFuture;
 use percent_encoding::percent_decode;
-use serde::Deserialize;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tower::{Layer, Service};
 
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct LoggerConfig {
-    pub path: PathBuf,
-    pub name: String,
-    pub file: bool,
-    pub stdout: bool,
-    // 定期删除 单位(天)
-    pub delete: Option<usize>,
-}
-
-impl LoggerConfig {
-    pub fn delete_log(&self) -> anyhow::Result<()> {
-        if let Some(n) = self.delete {
-            let now = Local::now();
-            for entry in fs::read_dir(&self.path)?.flatten() {
-                let meta = entry.metadata()?;
-                let date: DateTime<Local> = meta.created()?.into();
-                if (now - date).num_days() > n as i64 {
-                    fs::remove_file(entry.path())?
-                }
-            }
-        };
-        Ok(())
-    }
-
-    pub fn create_log_file(&self, time: &DateTime<Local>) -> File {
-        fs::create_dir_all(&self.path).expect("自动创建日志文件父级目录失败");
-        let name = time.format(&self.name).to_string();
-        File::options()
-            .create(true)
-            .append(true)
-            .write(true)
-            .open(self.path.join(name))
-            .expect("日志文件创建失败")
-    }
-}
-
-impl Default for LoggerConfig {
-    fn default() -> Self {
-        Self {
-            path: "logs".into(),
-            name: "%Y%m%d.log".into(),
-            file: false,
-            stdout: true,
-            delete: None,
-        }
-    }
-}
+use crate::logger::{LogMsg, LoggerConfig};
 
 #[derive(Clone)]
 pub struct Logger {
-    sender: UnboundedSender<LogMsg>,
+    sender: Sender<LogMsg>,
 }
 
 impl Logger {
     pub fn new(config: LoggerConfig) -> Self {
         let mut time = Local::now();
-        let mut file = config.file.then(|| config.create_log_file(&time));
-        let (sender, mut rx) = unbounded_channel::<LogMsg>();
+        let mut file = config.file.then(|| config.update_log_file(&time));
+        let mut stdout = config.stdout.then(|| io::stdout());
+        let (sender, rx) = mpsc::channel::<LogMsg>();
 
-        // 单独线程 同步写入日志
-        tokio::spawn(async move {
-            while let Some(msg) = rx.recv().await {
-                if config.stdout {
-                    msg.stdout()
+        thread::spawn(move || {
+            // 单独线程 同步写入日志
+            for msg in rx {
+                if let Some(stdout) = stdout.as_mut() {
+                    if let Err(err) = msg.write(&config, stdout, false) {
+                        eprintln!("写入日志失败 -> {err}")
+                    }
                 }
 
                 if let Some(file) = file.as_mut() {
-                    // 切换日志文件
+                    // 更新日志文件
                     if time.date_naive() != msg.begin.date_naive() {
                         time = msg.begin;
-                        *file = config.create_log_file(&time)
+                        *file = config.update_log_file(&time);
                     }
-                    msg.file_out(file);
-                    // 定期删除日志
-                    if let Err(err) = config.delete_log() {
-                        eprintln!("日志删除失败: {err}")
-                    };
+                    if let Err(err) = msg.write(&config, file, true) {
+                        eprintln!("写入日志失败 -> {err}")
+                    }
                 }
             }
         });
@@ -125,7 +74,7 @@ impl<S> Layer<S> for Logger {
 #[derive(Clone)]
 pub struct LoggerService<S> {
     inner: S,
-    sender: UnboundedSender<LogMsg>,
+    sender: Sender<LogMsg>,
 }
 
 impl<S> Service<Request<Body>> for LoggerService<S>
@@ -165,19 +114,11 @@ where
             let status = response.status().as_u16();
             // 是否重定向
             if let Some(p) = response.headers().get(LOCATION) {
-                path = format!("{path} -> {}", percent_decode(p.as_bytes()).decode_utf8_lossy())
+                path.push_str(" -> ");
+                path.push_str(&percent_decode(p.as_bytes()).decode_utf8_lossy())
             }
 
-            let msg = LogMsg {
-                logo: "[AXUM]".into(),
-                begin,
-                end: Local::now(),
-                status,
-                ip,
-                method,
-                path,
-                other: "".into(),
-            };
+            let msg = LogMsg { begin, end: Local::now(), status, ip, method, path };
 
             if let Err(err) = sender.send(msg) {
                 eprintln!("Send 日志时出现错误 {err}")
@@ -185,76 +126,4 @@ where
             Ok(response)
         })
     }
-}
-
-struct LogMsg {
-    logo: String,
-    begin: DateTime<Local>,
-    end: DateTime<Local>,
-    status: u16,
-    ip: String,
-    method: String,
-    path: String,
-    other: String,
-}
-
-impl LogMsg {
-    fn stdout(&self) {
-        let status = match self.status / 100 {
-            2 => cs!(BgGreen; " {} ", self.status),
-            3 => cs!(BgBlue; " {} ", self.status),
-            4 | 5 => cs!(BgRed; " {} ", self.status),
-            _ => cs!(BgYellow; " {} ", self.status),
-        };
-
-        let method = match self.method.as_str() {
-            "GET" => cs!(BgGreen; " {:<6} ", self.method),
-            "POST" => cs!(BgBlue; " {:<6} ", self.method),
-            "DELETE" => cs!(BgRed; " {:<6} ", self.method),
-            _ => cs!(BgYellow; " {:<6} ", self.method),
-        };
-
-        println!(
-            "[{}] {} |{}| {:>6}ms | {} |{} {} {}",
-            self.end.format("%Y-%m-%d %H:%M:%S").color(127, 132, 142),
-            self.logo.fonts(fonts!(Bold, Yellow)),
-            status,
-            (self.end - self.begin).num_milliseconds(),
-            cs!(Yellow; "{:<15}", self.ip),
-            method,
-            self.path,
-            self.other
-        );
-    }
-
-    fn file_out(&self, file: &mut File) {
-        let msg = format!(
-            "[{}] {} | {} | {:>6}ms | {:>15} | {:<6} {} {}\n",
-            self.end.format("%Y-%m-%d %H:%M:%S"),
-            self.logo,
-            self.status,
-            (self.end - self.begin).num_milliseconds(),
-            self.ip,
-            self.method,
-            self.path,
-            self.other
-        );
-        if let Err(err) = file.write_all(msg.as_bytes()) {
-            println!("日志写入文件时出错 -> {err}")
-        }
-    }
-}
-
-pub fn create_log_file(path: String) -> File {
-    let path = Path::new(&path);
-    if let Some(p) = path.parent() {
-        fs::create_dir_all(p).expect("自动创建日志文件父级目录失败")
-    }
-
-    File::options()
-        .create(true)
-        .append(true)
-        .write(true)
-        .open(path)
-        .expect("日志文件创建失败")
 }

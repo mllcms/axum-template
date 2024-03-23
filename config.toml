@@ -9,13 +9,14 @@ username = "postgres"
 password = "123456"
 
 [logger]
-path = "logs"
-# 每天第一个请求进来时更新
-name = "%Y%m%d.txt"
-file = true
-stdout = true
-# 定期删除(天)
-delete = 1
+logo = "[AXUM]"
+color = true        # 是否染色
+stdout = true       # 是否输出到终端
+file = true         # 是否写入文件
+path = "logs"       # 日志路径
+name = "%y%m%d.log" # 日志文件每天首次请求更新
+#delete = 1 # 定期删除(天)
+time = "%y-%m-%d %H:%M:%S%.3f" # 时间显示格式
 
 [jwt]
 secret = "秘钥"
