@@ -51,7 +51,10 @@ pub fn print_router_info(router: &Router) {
     let mut map: HashMap<i32, RouteInfo> = HashMap::new();
 
     let mut info: Option<&mut RouteInfo> = None;
-    let mut lines = reader.lines().flatten().take_while(|t| !t.contains("fallback_router"));
+    let mut lines = reader
+        .lines()
+        .map_while(Result::ok)
+        .take_while(|t| !t.contains("fallback_router"));
     while let Some(line) = lines.next() {
         match &mut info {
             Some(_) if line.contains("RouteId(") => info = None,

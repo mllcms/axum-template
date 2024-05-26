@@ -28,7 +28,7 @@ impl Logger {
     pub fn new(config: LoggerConfig) -> Self {
         let mut time = Local::now();
         let mut file = config.file.then(|| config.update_log_file(&time));
-        let mut stdout = config.stdout.then(|| io::stdout());
+        let mut stdout = config.stdout.then(io::stdout);
         let (sender, rx) = mpsc::channel::<LogMsg>();
 
         thread::spawn(move || {

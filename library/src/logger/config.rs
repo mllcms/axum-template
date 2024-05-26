@@ -98,7 +98,6 @@ impl LoggerConfig {
         File::options()
             .create(true)
             .append(true)
-            .write(true)
             .open(self.path.join(name))
             .expect("日志文件创建失败")
     }

@@ -10,3 +10,4 @@ pub mod multipart;
 pub mod resp;
 pub mod tools;
 pub mod validator;
+pub mod config;

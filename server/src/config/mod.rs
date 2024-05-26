@@ -3,13 +3,11 @@ library::re_export! {
    mod jwt;
 }
 
-use std::{fs, io, process};
-
-use library::logger::LoggerConfig;
+use library::{config::ConfigLoad, logger::LoggerConfig};
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 
-pub static CONFIG: Lazy<Config> = Lazy::new(Config::new);
+pub static CONFIG: Lazy<Config> = Lazy::new(|| Config::from_toml("config.toml", "加载配置失败: "));
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
@@ -20,16 +18,4 @@ pub struct Config {
     pub jwt: JwtConfig,
 }
 
-impl Config {
-    fn new() -> Self {
-        Self::parse().unwrap_or_else(|err| {
-            eprintln!("加载配置失败: {err}");
-            process::exit(0)
-        })
-    }
-
-    fn parse() -> io::Result<Self> {
-        let config = fs::read_to_string("config.toml")?;
-        toml::from_str(&config).map_err(io::Error::other)
-    }
-}
+impl ConfigLoad for Config {}
